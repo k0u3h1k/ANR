@@ -13,6 +13,7 @@
 - **ANR SR**: super resolution (upscaling). Built-in native temporal reconstruction engine in beta.
 - **ANR RR**: ray reconstruction (denoising for ray tracing). Built-in native neural denoising engine in beta.
 - **Source code**: coming soon.
+- **Complete Architecture & User Guide**: see [HOW_TO_USE.md](HOW_TO_USE.md) for how everything works and detailed instructions.
 - **nr-record**: records a game's frame generation or upscaler inputs to compare ANR FG, NVIDIA DLSS-G, DLSS, FSR, XeSS and others ([below](#record-and-compare-frame-generation)). Source in this repository.
 
 ## ANR FG Beta
