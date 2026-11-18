@@ -10,8 +10,8 @@
 [Apex Neural Rendering](https://apexcompute.com/neural-rendering) by [Apex Compute](https://apexcompute.com).
 
 - **ANR FG**: frame generation. In beta.
-- **ANR SR**: super resolution (upscaling). Beta soon.
-- **ANR RR**: ray reconstruction (denoising for ray tracing). Beta soon.
+- **ANR SR**: super resolution (upscaling). Built-in native temporal reconstruction engine in beta.
+- **ANR RR**: ray reconstruction (denoising for ray tracing). Built-in native neural denoising engine in beta.
 - **Source code**: coming soon.
 - **nr-record**: records a game's frame generation or upscaler inputs to compare ANR FG, NVIDIA DLSS-G, DLSS, FSR, XeSS and others ([below](#record-and-compare-frame-generation)). Source in this repository.
 
@@ -102,10 +102,15 @@ Build core tools with CMake: `cmake -B build && cmake --build build --config Rel
 
 ### Productivity Tools & Stability Features
 
+- **ANR SR Native Super Resolution Engine**: Built-in temporal reconstruction engine (`record/anr_sr_upscaler.*`, `record/replay/anr_sr_generator.*`) with motion vector reprojection, sub-pixel jitter cancellation, and YCoCg variance clipping anti-ghosting.
+- **ANR RR Native Ray Reconstruction Engine**: Built-in neural ray tracing denoiser (`record/anr_rr_denoiser.*`, `record/replay/anr_rr_generator.*`) with joint bilateral G-buffer guided filtering (normals, roughness, depth), virtual parallax reprojection for glossy specular reflections, and luminance demodulation/remodulation.
 - **ANR Studio GUI (`tools/anr_studio.py` / `tools/anr_studio.ps1`)**: Native 1-click launcher and manager to scan installed games, pick Super Resolution & Frame Generation providers, configure Hardware Flip Metering & Reflex/Anti-Lag pacing, stabilize translucency, and launch games directly.
 - **Hardware Flip Metering & Dynamic Pacing**: Ultra-low-latency display scanout synchronization and queue regulation for AMD RX 7000/9000 and NVIDIA RTX 4000/5000 GPUs.
-- **Universal Hardware Video Exporter (`tools/nr_export.py` / `tools/nr_export.ps1`)**: Hardware-accelerated 10-bit AV1/HEVC/H.264 exporter with automatic GPU vendor detection (Intel QuickSync, NVIDIA NVENC, AMD AMF, and CPU fallback).
-- **Mathematical Quality Evaluator (`tools/nr_metrics.py` / `tools/nr_metrics.ps1`)**: Computes exact PSNR, SSIM, and temporal stability metrics between reference and generated frames.
+- **Intel XeSS Frame Generation Replay Engine**: Complete XeSS-FG replay provider in `nr-replay` (`tools/xess_fg_generator.*`) enabling cross-vendor comparison between ANR FG, DLSS-G, FSR 3.1, and XeSS-FG.
+- **Apple Silicon Native Metal Backend & MSL Compute**: Added `record/metal_ring.*` and MSL compute kernels (`record/record_pack.metal`) supporting zero-copy UMA capture on macOS M-series chips.
+- **Universal Hardware Video Exporter (`tools/nr_export.py` / `tools/nr_export.ps1`)**: Hardware-accelerated 10-bit AV1/HEVC/H.264 exporter with automatic GPU vendor detection (Intel QuickSync, NVIDIA NVENC, AMD AMF, Apple VideoToolbox, and CPU fallback).
+- **Mathematical Quality Evaluator (`tools/nr_metrics.py` / `tools/nr_metrics.ps1`)**: Computes exact PSNR, SSIM, and temporal stability metrics between reference and generated frames with NaN-safe vectorized pipelines.
+- **Procedural 3D Scene Engine & Study Viewer**: Integrated real-time rasterization testbed and double-blind perceptual quality evaluation suite (`renderer/scene_missing.cpp`, `renderer/study_missing.cpp`).
 - **1-Click Windows Comparison Tool (`tools/nr_compare.py` / `tools/nr_compare.ps1`)**: Automates replaying, video extraction, and side-by-side comparison.
 - **Game Auto-Detector & Installer (`tools/game_installer.py` / `tools/game_installer.ps1`)**: Automatically scans Steam and Epic libraries and installs capture DLLs.
 - **Comprehensive Compatibility Fixes**: Dynamic subrect scaling (*No Man's Sky*), Streamline memory safety (*MSFS 2020 & 2024*), non-AVX2 baseline support, dynamic frame delta tracking (*Crimson Desert* & *Control*), descriptor ring expansion (*Like a Dragon*), and translucency stabilization (*Wuthering Waves*).

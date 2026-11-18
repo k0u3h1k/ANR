@@ -258,9 +258,12 @@ def install_into_game(game_path, upscaler=None):
     else:
         ini_content += "\n[FrameGen]\nFGNvngxReplacement=nr-record\n"
 
-    # Optional upscaler tuning (e.g. XeSS for Intel Arc 140V)
+    # Optional upscaler tuning (e.g. XeSS for Intel Arc 140V, or ANR native)
     if upscaler:
-        ini_content = re.sub(r'(?m)^Dx12Upscaler=.*', f'Dx12Upscaler={upscaler}', ini_content)
+        if "Dx12Upscaler" in ini_content:
+            ini_content = re.sub(r'(?m)^Dx12Upscaler=.*', f'Dx12Upscaler={upscaler}', ini_content)
+        else:
+            ini_content += f"\n[Upscalers]\nDx12Upscaler={upscaler}\n"
         print(f"[+] Configured Dx12Upscaler = {upscaler} in OptiScaler.ini")
 
     opti_ini.write_text(ini_content, encoding="utf-8")
@@ -307,8 +310,8 @@ def main():
     parser.add_argument("--scan", "-s", action="store_true", help="Scan and list installed games with feature detection")
     parser.add_argument("--install", "-i", help="Game number from scan, or full folder path to install into")
     parser.add_argument("--uninstall", "-u", help="Game number from scan, or full folder path to uninstall from")
-    parser.add_argument("--upscaler", choices=("xess", "dlss", "fsr21", "fsr22", "fsr31"),
-                        help="Configure primary upscaler in OptiScaler.ini (Recommended: 'xess' for Intel Arc 140V)")
+    parser.add_argument("--upscaler", choices=("anr", "anr-sr", "anr-rr", "xess", "dlss", "fsr21", "fsr22", "fsr31"),
+                        help="Configure primary upscaler in OptiScaler.ini (Recommended: 'anr' / 'anr-rr', or 'xess' for Intel Arc 140V)")
     parser.add_argument("--path", "-p", type=Path, help="Additional custom directory to scan")
 
     args = parser.parse_args()

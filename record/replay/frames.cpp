@@ -120,6 +120,36 @@ float FromHalf(uint16_t h) {
     return f;
 }
 
+struct HalfTables {
+    uint8_t to_unorm8[65536];
+    uint16_t to_unorm10[65536];
+    uint8_t to_unorm2[65536];
+    uint16_t unorm8_to_half[256];
+    uint16_t unorm10_to_half[1024];
+    uint16_t unorm2_to_half[4];
+
+    HalfTables() {
+        for (uint32_t bits = 0; bits < 65536; bits++) {
+            const float v = IsNan((uint16_t)bits) ? 0.0f : FromHalf((uint16_t)bits);
+            const float clamped = std::clamp(v, 0.0f, 1.0f);
+            to_unorm8[bits] = (uint8_t)std::lround(clamped * 255.0f);
+            to_unorm10[bits] = (uint16_t)std::lround(clamped * 1023.0f);
+            to_unorm2[bits] = (uint8_t)std::lround(clamped * 3.0f);
+        }
+        for (uint32_t code = 0; code <= 255; code++)
+            unorm8_to_half[code] = ToHalf((float)code / 255.0f);
+        for (uint32_t code = 0; code <= 1023; code++)
+            unorm10_to_half[code] = ToHalf((float)code / 1023.0f);
+        for (uint32_t code = 0; code <= 3; code++)
+            unorm2_to_half[code] = ToHalf((float)code / 3.0f);
+    }
+};
+
+const HalfTables& GetHalfTables() {
+    static const HalfTables tables;
+    return tables;
+}
+
 std::string FrameStem(const std::string& kind, uint32_t a, uint32_t b, double t) {
     char text[96];
     std::snprintf(text, sizeof(text), "%s_f%u-f%u_t%.3f", kind.c_str(), a, b, t);
@@ -136,17 +166,24 @@ bool WriteRaw(const std::string& path, const Image& image, std::string& error) {
     if (image.format.layout == Layout::RGBA16F) {
         std::memcpy(values.data(), image.texels.data(), 8 * n);
     } else {
-        uint32_t steps[4];
-        Steps(image.format.layout, steps);
-        std::vector<uint16_t> table[4];  // code / steps as float16, per channel
-        for (int c = 0; c < 4; c++)
-            for (uint32_t code = 0; code <= steps[c]; code++)
-                table[c].push_back(ToHalf((float)code / (float)steps[c]));
-        uint32_t codes[4];
-        for (size_t p = 0; p < n; p++) {
-            Codes(image.texels.data() + p * image.format.texel, image.format.layout, codes);
-            for (int c = 0; c < 4; c++)
-                values[4 * p + c] = table[c][codes[c]];
+        const auto& tbl = GetHalfTables();
+        if (image.format.layout == Layout::RGB10A2) {
+            for (size_t p = 0; p < n; p++) {
+                uint32_t w;
+                std::memcpy(&w, image.texels.data() + p * 4, 4);
+                values[4 * p + 0] = tbl.unorm10_to_half[w & 1023];
+                values[4 * p + 1] = tbl.unorm10_to_half[(w >> 10) & 1023];
+                values[4 * p + 2] = tbl.unorm10_to_half[(w >> 20) & 1023];
+                values[4 * p + 3] = tbl.unorm2_to_half[w >> 30];
+            }
+        } else {
+            const uint8_t* tex = image.texels.data();
+            for (size_t p = 0; p < n; p++) {
+                values[4 * p + 0] = tbl.unorm8_to_half[tex[4 * p + 0]];
+                values[4 * p + 1] = tbl.unorm8_to_half[tex[4 * p + 1]];
+                values[4 * p + 2] = tbl.unorm8_to_half[tex[4 * p + 2]];
+                values[4 * p + 3] = tbl.unorm8_to_half[tex[4 * p + 3]];
+            }
         }
     }
     RawHeader h;
@@ -201,26 +238,24 @@ bool ReadRaw(const std::string& path, Image& image, std::string& error) {
         std::memcpy(image.texels.data(), values.data(), 8 * n);
         return true;
     }
-    uint32_t steps[4];
-    Steps(image.format.layout, steps);
-    std::vector<uint16_t> table[4];  // float16 bits to the nearest code, per channel
-    for (int c = 0; c < 4; c++) {
-        table[c].resize(65536);
-        for (uint32_t bits = 0; bits < 65536; bits++) {
-            const float v = IsNan((uint16_t)bits) ? 0.0f : FromHalf((uint16_t)bits);
-            table[c][bits] = (uint16_t)std::lround(std::clamp(v, 0.0f, 1.0f) * steps[c]);
+    const auto& tbl = GetHalfTables();
+    if (image.format.layout == Layout::RGB10A2) {
+        for (size_t p = 0; p < n; p++) {
+            const uint16_t* v = values.data() + 4 * p;
+            const uint32_t w = (uint32_t)tbl.to_unorm10[v[0]] |
+                               ((uint32_t)tbl.to_unorm10[v[1]] << 10) |
+                               ((uint32_t)tbl.to_unorm10[v[2]] << 20) |
+                               ((uint32_t)tbl.to_unorm2[v[3]] << 30);
+            std::memcpy(image.texels.data() + p * 4, &w, 4);
         }
-    }
-    for (size_t p = 0; p < n; p++) {
-        const uint16_t* v = values.data() + 4 * p;
-        uint8_t* texel = image.texels.data() + p * image.format.texel;
-        if (image.format.layout == Layout::RGB10A2) {
-            const uint32_t w = table[0][v[0]] | (uint32_t)table[1][v[1]] << 10 | (uint32_t)table[2][v[2]] << 20 |
-                               (uint32_t)table[3][v[3]] << 30;
-            std::memcpy(texel, &w, 4);
-        } else {
-            for (int c = 0; c < 4; c++)
-                texel[c] = (uint8_t)table[c][v[c]];
+    } else {
+        uint8_t* tex = image.texels.data();
+        for (size_t p = 0; p < n; p++) {
+            const uint16_t* v = values.data() + 4 * p;
+            tex[4 * p + 0] = tbl.to_unorm8[v[0]];
+            tex[4 * p + 1] = tbl.to_unorm8[v[1]];
+            tex[4 * p + 2] = tbl.to_unorm8[v[2]];
+            tex[4 * p + 3] = tbl.to_unorm8[v[3]];
         }
     }
     return true;
@@ -361,21 +396,29 @@ void SdrCurve::Row(const uint8_t* texels, uint32_t width, float* rgb) const {
 }
 
 void ToP010(const float* rgb0, const float* rgb1, uint32_t width, uint16_t* y0, uint16_t* y1, uint16_t* uv) {
-    auto code = [](float v) { return (uint16_t)(std::lround(std::clamp(v, 0.0f, 1023.0f)) << 6); };
+    auto code = [](float v) -> uint16_t {
+        int iv = static_cast<int>(v + 0.5f);
+        if (iv < 0) iv = 0;
+        else if (iv > 1023) iv = 1023;
+        return static_cast<uint16_t>(iv << 6);
+    };
+    constexpr float INV_CB = 1.0f / 1.8556f;
+    constexpr float INV_CR = 1.0f / 1.5748f;
     for (uint32_t x = 0; x + 1 < width; x += 2) {
         float cb = 0, cr = 0;
         const float* rows[2] = {rgb0, rgb1};
         uint16_t* ys[2] = {y0, y1};
-        for (int r = 0; r < 2; r++)
+        for (int r = 0; r < 2; r++) {
             for (uint32_t dx = 0; dx < 2; dx++) {
                 const float* p = rows[r] + 3 * (x + dx);
                 const float luma = 0.2126f * p[0] + 0.7152f * p[1] + 0.0722f * p[2];
                 ys[r][x + dx] = code(64.0f + 876.0f * luma);
-                cb += (p[2] - luma) / 1.8556f;
-                cr += (p[0] - luma) / 1.5748f;
+                cb += (p[2] - luma) * INV_CB;
+                cr += (p[0] - luma) * INV_CR;
             }
-        uv[x] = code(512.0f + 896.0f * cb / 4.0f);
-        uv[x + 1] = code(512.0f + 896.0f * cr / 4.0f);
+        }
+        uv[x] = code(512.0f + 224.0f * cb);
+        uv[x + 1] = code(512.0f + 224.0f * cr);
     }
 }
 

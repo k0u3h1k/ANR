@@ -750,7 +750,9 @@ std::unique_ptr<Recorder> Recorder::Start(std::shared_ptr<Ring> ring, const Conf
                 std::fclose(file);
         return nullptr;
     }
-    std::setvbuf(r->frames, nullptr, _IONBF, 0);  // the writer writes whole blocks
+    std::setvbuf(r->frames, nullptr, _IOFBF, 2 * 1024 * 1024);  // 2 MiB stream buffer to coalesce disk writes
+    std::setvbuf(r->index, nullptr, _IOFBF, 64 * 1024);
+    std::setvbuf(r->params, nullptr, _IOFBF, 64 * 1024);
     r->level = config.zstd_level;
     r->threads = config.threads ? config.threads : std::clamp(std::thread::hardware_concurrency() / 4, 2u, 8u);
     r->pool_cap = std::max<size_t>((size_t)config.queue_mb * 1048576 / ZSTD_compressBound(BLOCK_BYTES),

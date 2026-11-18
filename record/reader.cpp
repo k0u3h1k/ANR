@@ -412,6 +412,46 @@ bool Decode(Recording& r, const IndexRecord& ix, Pool& pool, DecodeScratch& s,
                        (half(v[2][p0 + p]) >> 5 & 0x3FF) << 22;
             return;
         }
+        // Vectorized fast paths for common textures avoiding per-pixel memcpy
+        if (x.channels == 4 && x.texel == 4 && ((x.kinds & 0xE0E0E0E0u) == 0)) {
+            const uint32_t* src0 = v[0].data() + p0;
+            const uint32_t* src1 = v[1].data() + p0;
+            const uint32_t* src2 = v[2].data() + p0;
+            const uint32_t* src3 = v[3].data() + p0;
+            uint32_t* o = (uint32_t*)row;
+            for (size_t p = 0; p < w; p++)
+                o[p] = (src0[p] & 0xFF) | ((src1[p] & 0xFF) << 8) | ((src2[p] & 0xFF) << 16) | ((src3[p] & 0xFF) << 24);
+            return;
+        }
+        if (x.channels == 2 && x.texel == 4 && (((x.kinds >> 5) & 7) == 1) && (((x.kinds >> 13) & 7) == 1)) {
+            const uint32_t* src0 = v[0].data() + p0;
+            const uint32_t* src1 = v[1].data() + p0;
+            uint32_t* o = (uint32_t*)row;
+            auto half = [](uint32_t val) { return (val ^ ((val & 0x8000) ? 0x8000u : 0xFFFFu)) & 0xFFFF; };
+            for (size_t p = 0; p < w; p++)
+                o[p] = half(src0[p]) | (half(src1[p]) << 16);
+            return;
+        }
+        if (x.channels == 1 && x.texel == 4 && (((x.kinds >> 5) & 7) == 2)) {
+            const uint32_t* src0 = v[0].data() + p0;
+            uint32_t* o = (uint32_t*)row;
+            for (size_t p = 0; p < w; p++) {
+                uint32_t val = src0[p];
+                o[p] = val ^ ((val & 0x80000000u) ? 0x80000000u : 0xFFFFFFFFu);
+            }
+            return;
+        }
+        if (x.channels == 4 && x.texel == 8 && (((x.kinds >> 5) & 7) == 1)) {
+            const uint32_t* src0 = v[0].data() + p0;
+            const uint32_t* src1 = v[1].data() + p0;
+            const uint32_t* src2 = v[2].data() + p0;
+            const uint32_t* src3 = v[3].data() + p0;
+            uint64_t* o = (uint64_t*)row;
+            auto half = [](uint32_t val) -> uint64_t { return (val ^ ((val & 0x8000) ? 0x8000u : 0xFFFFu)) & 0xFFFF; };
+            for (size_t p = 0; p < w; p++)
+                o[p] = half(src0[p]) | (half(src1[p]) << 16) | (half(src2[p]) << 32) | (half(src3[p]) << 48);
+            return;
+        }
         size_t offset = 0;
         for (uint32_t c = 0; c < x.channels; c++) {
             const uint32_t kind = (x.kinds >> (8 * c)) & 0xFF, type = kind >> 5;

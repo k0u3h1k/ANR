@@ -51,7 +51,7 @@ using replay::StreamWriter;
 namespace {
 
 constexpr const char* USAGE =
-    "usage: nr-replay --record DIR --out DIR --generator provider|nvidia|fsr|ffx --dll PATH [--label TEXT]\n"
+    "usage: nr-replay --record DIR --out DIR --generator anr|provider|nvidia|fsr|ffx|xess [--dll PATH] [--label TEXT]\n"
     "                 [--frames A:B] [--multiplier M] [--mode interleaved|generated] [--raw] [--stream PATH|-]\n"
     "                 [--ngx-log]\n";
 
@@ -98,6 +98,25 @@ bool Parse(int argc, char** argv, Options& o, std::string& error) {
             error = "unknown option " + k;
             return false;
         }
+    }
+    if (o.generator == "anr" || o.generator == "anr-fg") {
+        if (o.dll.empty()) {
+            for (const char* candidate : {
+                "nvngx_dlssg.dll",
+                "record/capture/nvngx_dlssg.dll",
+                "build/bin/nvngx_dlssg.dll",
+                "OptiScaler/custom/Apex Neural Rendering FG/dlssg/nvngx_dlssg.dll",
+                "OptiScaler/custom/nr-record/dlssg/nvngx_dlssg.dll"
+            }) {
+                std::error_code ec;
+                if (std::filesystem::is_regular_file(candidate, ec)) {
+                    o.dll = candidate;
+                    break;
+                }
+            }
+        }
+        if (o.label.empty())
+            o.label = "Apex Neural Rendering FG (ANR FG)";
     }
     if (o.record.empty() || o.out.empty() || o.generator.empty() || o.dll.empty()) {
         error = "--record, --out, --generator and --dll are needed";
@@ -418,10 +437,12 @@ int Run(const Options& o, nlohmann::json& report, std::string& error) {
     std::unique_ptr<replay::FgGenerator> generator;
     if (o.generator == "fsr" || o.generator == "ffx") {
         generator = replay::MakeFfxFgGenerator(o.dll, o.label, error);
-    } else if (o.generator == "provider" || o.generator == "nvidia") {
-        generator = replay::MakeNgxGenerator(o.generator, o.dll, o.label, o.ngx_log, error);
+    } else if (o.generator == "xess" || o.generator == "xefg") {
+        generator = replay::MakeXessFgGenerator(o.dll, o.label, error);
+    } else if (o.generator == "provider" || o.generator == "nvidia" || o.generator == "anr" || o.generator == "anr-fg") {
+        generator = replay::MakeNgxGenerator(o.generator == "nvidia" ? "nvidia" : "provider", o.dll, o.label, o.ngx_log, error);
     } else {
-        error = "--generator must be provider, nvidia, fsr or ffx";
+        error = "--generator must be anr, provider, nvidia, fsr, ffx, or xess";
     }
     if (!generator)
         return 1;

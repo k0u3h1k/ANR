@@ -156,9 +156,10 @@ struct LatencyPacer {
         if (target_fps > 0) {
             target_interval_sec = 1.0 / (double)target_fps;
         } else if (flip_metering && history_count >= 4) {
-            std::vector<double> sorted(intervals, intervals + history_count);
-            std::sort(sorted.begin(), sorted.end());
-            const double median_interval = sorted[sorted.size() / 2];
+            double sorted[HISTORY_CAP];
+            std::memcpy(sorted, intervals, history_count * sizeof(double));
+            std::sort(sorted, sorted + history_count);
+            const double median_interval = sorted[history_count / 2];
             // Align pace interval to 98% of display cadence to prevent queue latency buildup
             target_interval_sec = std::clamp(median_interval * 0.98, 0.002, 0.0333);
         }

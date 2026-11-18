@@ -46,6 +46,8 @@ private:
     void* dispatch_ = nullptr;
     void* context_ = nullptr;
     std::string version_;
+    uint32_t render_width_ = 0, render_height_ = 0;
+    uint32_t output_width_ = 0, output_height_ = 0;
 };
 
 }  // namespace record

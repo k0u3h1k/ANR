@@ -54,8 +54,17 @@ private:
         int active = 0;  // workers in it, under mutex_
     };
     static void Run(Job& job) {
-        for (size_t i; (i = job.next.fetch_add(1)) < job.n;)
-            job.run(i);
+        const size_t n = job.n;
+        // Dynamic chunking reduces atomic cacheline bouncing across CPU cores
+        const size_t chunk = (n > 64) ? 8 : (n > 16 ? 4 : 1);
+        for (;;) {
+            size_t start = job.next.fetch_add(chunk, std::memory_order_relaxed);
+            if (start >= n)
+                break;
+            size_t end = std::min(start + chunk, n);
+            for (size_t i = start; i < end; ++i)
+                job.run(i);
+        }
     }
     void Work() {
         std::unique_lock<std::mutex> lock(mutex_);
@@ -64,7 +73,7 @@ private:
             work_.wait(lock, [&] {
                 job = nullptr;
                 for (Job* j : jobs_)
-                    if (j->next.load() < j->n) {
+                    if (j->next.load(std::memory_order_relaxed) < j->n) {
                         job = j;
                         break;
                     }
@@ -77,7 +86,8 @@ private:
             Run(*job);
             lock.lock();
             job->active--;
-            done_.notify_all();
+            if (job->active == 0)
+                done_.notify_all();
         }
     }
     std::mutex mutex_;

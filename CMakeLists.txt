@@ -36,6 +36,7 @@ target_sources(anr_format INTERFACE
     record/format.h
     record/sr_roles.h
     record/pool.h
+    record/metal_ring.h
 )
 
 # Reader library
@@ -85,8 +86,13 @@ if(WIN32 AND ANR_BUILD_REPLAY)
         record/replay/nr_replay.cpp
         record/replay/ngx_generator.cpp
         record/replay/ffx_fg_generator.cpp
+        record/replay/xess_fg_generator.cpp
         record/replay/sr_replay.cpp
         record/replay/sr_generators.cpp
+        record/replay/anr_sr_generator.cpp
+        record/anr_sr_upscaler.cpp
+        record/replay/anr_rr_generator.cpp
+        record/anr_rr_denoiser.cpp
         record/ffx_upscaler.cpp
         record/xess_upscaler.cpp
     )
@@ -100,6 +106,42 @@ if(WIN32 AND ANR_BUILD_REPLAY)
         version
         advapi32
     )
+endif()
+
+# Optional capture DLLs (Windows D3D12/Vulkan)
+option(ANR_BUILD_CAPTURE "Build capture DLLs (nvngx_dlssg.dll and nr_record_sr.dll)" OFF)
+if(WIN32 AND ANR_BUILD_CAPTURE)
+    add_library(nvngx_dlssg SHARED
+        record/capture/capture.cpp
+        record/recorder.cpp
+        record/d3d12_packer.cpp
+        record/vulkan_ring.cpp
+    )
+    target_link_libraries(nvngx_dlssg PRIVATE
+        anr_format
+        d3d12
+        user32
+        dxgi
+    )
+    set_target_properties(nvngx_dlssg PROPERTIES PREFIX "")
+
+    add_library(nr_record_sr SHARED
+        record/capture/sr_capture.cpp
+        record/recorder.cpp
+        record/d3d12_packer.cpp
+        record/anr_sr_upscaler.cpp
+        record/anr_rr_denoiser.cpp
+        record/ffx_upscaler.cpp
+        record/xess_upscaler.cpp
+    )
+    target_link_libraries(nr_record_sr PRIVATE
+        anr_format
+        anr_reader
+        d3d12
+        user32
+        dxgi
+    )
+    set_target_properties(nr_record_sr PROPERTIES PREFIX "")
 endif()
 
 # Compiler warnings and optimizations
@@ -122,4 +164,10 @@ endif()
 install(TARGETS nr-record nr-video DESTINATION bin)
 if(TARGET nr-replay)
     install(TARGETS nr-replay DESTINATION bin)
+endif()
+if(TARGET nvngx_dlssg)
+    install(TARGETS nvngx_dlssg DESTINATION bin)
+endif()
+if(TARGET nr_record_sr)
+    install(TARGETS nr_record_sr DESTINATION bin)
 endif()

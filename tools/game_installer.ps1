@@ -12,7 +12,7 @@ param (
     [switch]$Scan,
     [string]$Install,
     [string]$Uninstall,
-    [ValidateSet("xess", "dlss", "fsr21", "fsr22", "fsr31")]
+    [ValidateSet("anr", "anr-sr", "anr-rr", "xess", "dlss", "fsr21", "fsr22", "fsr31")]
     [string]$Upscaler,
     [string]$Path
 )

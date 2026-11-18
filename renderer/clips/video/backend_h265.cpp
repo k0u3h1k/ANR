@@ -540,7 +540,7 @@ public:
                 const int type = (header[0] >> 1) & 63;
                 const int layer = ((header[0] & 1) << 5) | (header[1] >> 3);
                 if (layer == 0) {
-                    if (type == kIdrWRadl || type == kIdrNLp)
+                    if (type == kIdrWRadl || type == kIdrNLp || type == kCra || (type >= kBlaWLp && type <= kReservedIrap23))
                         idr = true;
                     if (type == kVps || type == kSps || type == kPps) {
                         head.resize(size_t(n));
@@ -555,7 +555,7 @@ public:
                 start_samples_.push_back(i);
         }
         if (start_samples_.empty() || start_samples_.front() != 0) {
-            *why = "the stream does not start with an IDR picture";
+            *why = "the stream does not start with an IDR or CRA random access picture";
             return false;
         }
         if (vps_.empty() || sps_.empty() || pps_.empty()) {

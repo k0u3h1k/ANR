@@ -77,6 +77,10 @@ std::unique_ptr<FgGenerator> MakeNgxGenerator(const std::string& kind, const std
 std::unique_ptr<FgGenerator> MakeFfxFgGenerator(const std::string& dll, const std::string& label,
                                                 std::string& error);
 
+// Intel's XeSS Frame Generation interface (XeSS-FG). dll is libxess_fg.dll or custom XeSS FG DLL.
+std::unique_ptr<FgGenerator> MakeXessFgGenerator(const std::string& dll, const std::string& label,
+                                                 std::string& error);
+
 // The file version (a.b.c.d) and SHA-256 of a DLL; empty where not readable.
 std::string FileVersion(const std::string& path);
 std::string FileSha256(const std::string& path);

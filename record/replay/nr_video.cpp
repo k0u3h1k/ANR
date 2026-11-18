@@ -42,7 +42,7 @@ namespace fs = std::filesystem;
 using replay::Image;
 
 constexpr const char* USAGE =
-    "usage: nr-video video SOURCE --out FILE.mp4 [--fps F] [--codec auto|hevc_nvenc|libx265] [--qp N]\n"
+    "usage: nr-video video SOURCE --out FILE.mp4 [--fps F] [--codec auto|hevc_nvenc|hevc_qsv|hevc_amf|hevc_videotoolbox|libx265] [--qp N]\n"
     "                 [--ffmpeg PATH]\n"
     "       nr-video side-by-side SOURCE_A SOURCE_B --out FILE.mp4 [--video-a FILE] [--video-b FILE] [as video]\n"
     "       nr-video png SOURCE --frames N,N,... --out DIR [--ffmpeg PATH]\n"
@@ -254,18 +254,20 @@ struct Encoding {
     double fps = 0;
 };
 
-// hevc_nvenc where ffmpeg has it and a GPU encodes with it, else libx265.
+// Hardware encoders in probe order (NVENC, QSV, AMF, VideoToolbox), else CPU libx265.
 std::string ChooseCodec(const Encoding& e) {
     if (e.codec != "auto")
         return e.codec;
-    Child probe;
-    std::string error;
-    if (probe.Start({e.ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
-                     "color=size=256x256:rate=1", "-frames:v", "1", "-c:v", "hevc_nvenc", "-profile:v", "main10",
-                     "-pix_fmt", "p010le", "-f", "null", "-"},
-                    false, true, error) &&
-        probe.Wait() == 0)
-        return "hevc_nvenc";
+    for (const char* candidate : {"hevc_nvenc", "hevc_qsv", "hevc_amf", "hevc_videotoolbox"}) {
+        Child probe;
+        std::string error;
+        if (probe.Start({e.ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
+                         "color=size=256x256:rate=1", "-frames:v", "1", "-c:v", candidate, "-profile:v", "main10",
+                         "-pix_fmt", "p010le", "-f", "null", "-"},
+                        false, true, error) &&
+            probe.Wait() == 0)
+            return candidate;
+    }
     return "libx265";
 }
 
@@ -286,6 +288,15 @@ public:
         if (codec == "hevc_nvenc")
             argv.insert(argv.end(), {"-c:v", "hevc_nvenc", "-profile:v", "main10", "-preset", "p5", "-tune", "hq",
                                      "-rc", "constqp", "-qp", std::to_string(e.qp), "-pix_fmt", "p010le"});
+        else if (codec == "hevc_qsv")
+            argv.insert(argv.end(), {"-c:v", "hevc_qsv", "-profile:v", "main10", "-preset", "medium",
+                                     "-global_quality", std::to_string(e.qp), "-pix_fmt", "p010le"});
+        else if (codec == "hevc_amf")
+            argv.insert(argv.end(), {"-c:v", "hevc_amf", "-profile:v", "main10", "-quality", "quality",
+                                     "-rc", "cqp", "-qp_i", std::to_string(e.qp), "-qp_p", std::to_string(e.qp), "-pix_fmt", "p010le"});
+        else if (codec == "hevc_videotoolbox")
+            argv.insert(argv.end(), {"-c:v", "hevc_videotoolbox", "-profile:v", "main10",
+                                     "-q:v", std::to_string(std::clamp(100 - e.qp * 2, 10, 95)), "-pix_fmt", "p010le"});
         else
             argv.insert(argv.end(), {"-c:v", codec, "-preset", "medium", "-crf", std::to_string(e.qp), "-pix_fmt",
                                      "yuv420p10le", "-x265-params", "log-level=error"});

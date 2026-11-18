@@ -21,6 +21,8 @@
 #include "record/replay/generator.h"
 #include "record/replay/ngx_common.h"
 #include "record/replay/sr_generator.h"
+#include "record/replay/anr_sr_generator.h"
+#include "record/replay/anr_rr_generator.h"
 #include "record/sr_roles.h"
 
 namespace replay {
@@ -433,7 +435,13 @@ std::unique_ptr<SrGenerator> MakeSrGenerator(const std::string& kind, const std:
         auto g = std::make_unique<XessSr>(dll, label);
         return g->Load(error) ? std::move(g) : nullptr;
     }
-    error = "--generator for SR and RR recordings is dlss, dlssd, ngx, fsr, xess or recorded";
+    if (kind == "anr" || kind == "anr-sr") {
+        return MakeAnrSrGenerator(label, error);
+    }
+    if (kind == "anr-rr" || kind == "anrrr") {
+        return MakeAnrRrGenerator(label, error);
+    }
+    error = "--generator for SR and RR recordings is dlss, dlssd, ngx, fsr, xess, anr, anr-rr or recorded";
     return nullptr;
 }
 

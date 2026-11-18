@@ -39,6 +39,8 @@
 #include <nvsdk_ngx_defs_dlssd.h>
 #include <nvsdk_ngx_params.h>
 
+#include "record/anr_sr_upscaler.h"
+#include "record/anr_rr_denoiser.h"
 #include "record/d3d12_packer.h"
 #include "record/ffx_upscaler.h"
 #include "record/xess_upscaler.h"
@@ -272,6 +274,10 @@ std::string IniUpscaler() {
                 return "xess";
             if (v == "fsr21" || v == "fsr22" || v == "fsr31" || v == "ffx")
                 return "ffx";
+            if (v == "anr" || v == "anrsr" || v == "anr-sr")
+                return "anr";
+            if (v == "anrrr" || v == "anr-rr")
+                return "anr-rr";
             return "";
         }
     }
@@ -284,11 +290,11 @@ std::string ForwardKind(bool rr) {
     if (kind != "auto")
         return kind;
     if (rr)
-        return "nvidia";  // only DLSS-RR does ray reconstruction
+        return FindCore() ? "nvidia" : "anr-rr";
     kind = IniUpscaler();
     if (kind == "nvidia" && !FindCore())
         kind.clear();
-    return !kind.empty() ? kind : FindCore() ? "nvidia" : "ffx";
+    return !kind.empty() ? kind : FindCore() ? "nvidia" : "anr";
 }
 
 // The NGX forward: NVIDIA's core, or forward's DLL where forward is a path. Loaded once.
@@ -296,7 +302,7 @@ Forward& LoadForward() {
     std::call_once(g_forward_once, [] {
         const std::string& kind = g_settings.forward;
         const bool path = !kind.empty() && kind != "auto" && kind != "nvidia" && kind != "ffx" && kind != "xess" &&
-                          kind != "none";
+                          kind != "anr" && kind != "anr-sr" && kind != "anr-rr" && kind != "none";
         HMODULE m = nullptr;
         if (!path) {
             m = FindCore();
@@ -439,6 +445,8 @@ struct Feature {
     std::string kind;  // its forward (ForwardKind)
     std::unique_ptr<record::FfxUpscaler> ffx;
     std::unique_ptr<record::XessUpscaler> xess;
+    std::unique_ptr<record::AnrSrUpscaler> anr_sr;
+    std::unique_ptr<record::AnrRrDenoiser> anr_rr;
     bool upscaler_failed = false;
     nlohmann::json create;  // the creation parameters, as record.json "create"
     uint32_t width = 0, height = 0, out_width = 0, out_height = 0;
@@ -707,12 +715,78 @@ std::string PrivateCopy(const std::string& file) {
     return copy;
 }
 
-// forward = ffx or xess: FSR or XeSS on the frame (its context made at the first frame). False if it cannot run.
+// forward = anr, anr-sr, anr-rr, ffx or xess: native ANR, FSR or XeSS on the frame. False if it cannot run.
 bool EvaluateUpscaler(Feature& f, ID3D12GraphicsCommandList* list, const NVSDK_NGX_Parameter* p) {
     if (f.upscaler_failed)
         return false;
     const record::SrCall call = CallOf(f, p);
     std::string error;
+
+    // Native Ray Reconstruction denoiser
+    if (f.rr() || f.kind == "anr-rr") {
+        if (!f.anr_rr) {
+            ComPtr<ID3D12Device> device;
+            list->GetDevice(IID_PPV_ARGS(&device));
+            f.anr_rr = std::make_unique<record::AnrRrDenoiser>();
+            if (!f.anr_rr->Create(device.Get(), f.width, f.height, f.out_width, f.out_height, call, error)) {
+                Log("forward anr-rr: %s", error.c_str());
+                f.upscaler_failed = true;
+                return false;
+            }
+            Log("forward anr-rr: %s", f.anr_rr->version().c_str());
+        }
+        auto get_res = [&](const char* a, const char* b = nullptr) -> ID3D12Resource* {
+            ID3D12Resource* r = Resource(p, a);
+            if (!r && b) r = Resource(p, b);
+            return r;
+        };
+        record::RrTextures rt;
+        rt.color = Resource(p, "Color");
+        rt.depth = Resource(p, "Depth");
+        rt.motion = Resource(p, "MotionVectors");
+        rt.diffuse_albedo = get_res("DLSS.Input.DiffuseAlbedo", "DiffuseAlbedo");
+        rt.specular_albedo = get_res("DLSS.Input.SpecularAlbedo", "SpecularAlbedo");
+        rt.normals = get_res("GBuffer.Normals", "Normals");
+        rt.roughness = get_res("GBuffer.Roughness", "Roughness");
+        rt.specular_hit_distance = get_res("DLSSD.SpecularHitDistance", "SpecularHitDistance");
+        rt.specular_motion = get_res("GBuffer.SpecularMvec", "SpecularMotionVectors");
+        rt.transparency = get_res("DLSS.TransparencyLayer", "FSR.transparencyAndComposition");
+        rt.output = Resource(p, "Output");
+        if (!f.anr_rr->Dispatch(list, rt, call, error)) {
+            Log("forward anr-rr: %s", error.c_str());
+            return false;
+        }
+        return true;
+    }
+
+    // Native Super Resolution upscaler
+    if (f.kind == "anr" || f.kind == "anr-sr") {
+        if (!f.anr_sr) {
+            ComPtr<ID3D12Device> device;
+            list->GetDevice(IID_PPV_ARGS(&device));
+            f.anr_sr = std::make_unique<record::AnrSrUpscaler>();
+            if (!f.anr_sr->Create(device.Get(), f.width, f.height, f.out_width, f.out_height, call, error)) {
+                Log("forward anr-sr: %s", error.c_str());
+                f.upscaler_failed = true;
+                return false;
+            }
+            Log("forward anr-sr: %s", f.anr_sr->version().c_str());
+        }
+        record::UpscaleTextures t;
+        t.color = Resource(p, "Color");
+        t.depth = Resource(p, "Depth");
+        t.motion = Resource(p, "MotionVectors");
+        t.exposure = Resource(p, "ExposureTexture");
+        t.reactive = Resource(p, "FSR.reactive");
+        t.transparency = Resource(p, "FSR.transparencyAndComposition");
+        t.output = Resource(p, "Output");
+        if (!f.anr_sr->Dispatch(list, t, call, error)) {
+            Log("forward anr-sr: %s", error.c_str());
+            return false;
+        }
+        return true;
+    }
+
     const bool xess = f.kind == "xess";
     if (!f.ffx && !f.xess) {
         ComPtr<ID3D12Device> device;
@@ -836,8 +910,8 @@ __declspec(dllexport) NVSDK_NGX_Result NVSDK_CONV NVSDK_NGX_D3D12_CreateFeature(
             if (nlohmann::json v = Both(p, name); !v.is_null())
                 f->create[name] = v;
         f->kind = ForwardKind(f->rr());
-        const bool upscaler = f->kind == "ffx" || f->kind == "xess";
-        if (upscaler && f->rr()) {
+        const bool upscaler = f->kind == "ffx" || f->kind == "xess" || f->kind == "anr" || f->kind == "anr-sr" || f->kind == "anr-rr";
+        if (upscaler && f->rr() && f->kind != "anr" && f->kind != "anr-rr") {
             Log("forward %s: no ray reconstruction", f->kind.c_str());
             return NVSDK_NGX_Result_FAIL_FeatureNotSupported;
         }

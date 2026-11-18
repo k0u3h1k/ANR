@@ -38,6 +38,7 @@ private:
          *optimal_ = nullptr, *version_ = nullptr;
     void* context_ = nullptr;
     int quality_ = 0;
+    uint32_t render_width_ = 0, render_height_ = 0;
 };
 
 }  // namespace record

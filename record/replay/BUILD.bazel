@@ -35,6 +35,12 @@ cc_binary(
         "sr_generator.h",
         "sr_generators.cpp",
         "sr_replay.cpp",
+        "anr_sr_generator.cpp",
+        "anr_sr_generator.h",
+        "anr_rr_generator.cpp",
+        "anr_rr_generator.h",
+        "xess_fg_generator.cpp",
+        "xess_fg_generator.h",
     ],
     linkopts = [
         "advapi32.lib",
@@ -46,6 +52,8 @@ cc_binary(
     deps = [
         ":frames",
         ":ngx_common",
+        "//record:anr_sr_upscaler",
+        "//record:anr_rr_denoiser",
         "//record:ffx_upscaler",
         "//record:format",
         "//record:reader",

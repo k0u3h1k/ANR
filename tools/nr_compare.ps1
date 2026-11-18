@@ -11,11 +11,11 @@ param (
     [string]$Record,
     [string]$Out = "out\cmp",
     [Parameter(Mandatory=$true)]
-    [ValidateSet("provider", "nvidia", "dlss", "dlssd", "ngx", "fsr", "ffx", "xess", "recorded")]
+    [ValidateSet("provider", "nvidia", "dlss", "dlssd", "ngx", "fsr", "ffx", "xess", "anr", "anr-sr", "anr-rr", "recorded")]
     [string]$Generator,
     [string]$Dll,
     [string]$Label = "A",
-    [ValidateSet("provider", "nvidia", "dlss", "dlssd", "ngx", "fsr", "ffx", "xess", "recorded")]
+    [ValidateSet("provider", "nvidia", "dlss", "dlssd", "ngx", "fsr", "ffx", "xess", "anr", "anr-sr", "anr-rr", "recorded")]
     [string]$BGenerator,
     [string]$BDll,
     [string]$BLabel = "B",

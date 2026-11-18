@@ -76,6 +76,29 @@ cc_library(
 # AMD's FSR upscaler through the FidelityFX API (AMD's DLL at run time), driven by an SR call: the SR capture DLL's ffx
 # forward and nr-replay's fsr generator.
 cc_library(
+    name = "anr_sr_upscaler",
+    srcs = ["anr_sr_upscaler.cpp"],
+    hdrs = ["anr_sr_upscaler.h"],
+    linkopts = ["d3d12.lib"],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        ":ffx_upscaler",
+        ":reader",
+    ],
+)
+
+cc_library(
+    name = "anr_rr_denoiser",
+    srcs = ["anr_rr_denoiser.cpp"],
+    hdrs = ["anr_rr_denoiser.h"],
+    linkopts = ["d3d12.lib"],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        ":reader",
+    ],
+)
+
+cc_library(
     name = "ffx_upscaler",
     srcs = ["ffx_upscaler.cpp"],
     hdrs = ["ffx_upscaler.h"],

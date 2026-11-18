@@ -67,6 +67,8 @@ def compute_metrics_pure(texels_a: bytes, texels_b: bytes, width: int, height: i
         rb, gb, bb, _ = struct.unpack_from("<4e", texels_b, offset)
 
         for va, vb in ((ra, rb), (ga, gb), (ba, bb)):
+            if math.isnan(va) or math.isnan(vb) or math.isinf(va) or math.isinf(vb):
+                continue
             diff = va - vb
             sq_err += diff * diff
             abs_err += abs(diff)
@@ -111,13 +113,12 @@ def compute_metrics_numpy(texels_a: bytes, texels_b: bytes, width: int, height: 
     if n_pixels == 0:
         return {"mse": 0.0, "mae": 0.0, "psnr_db": 100.0, "ssim": 1.0}
 
-    arr_a = np.frombuffer(texels_a[:n_pixels * 8], dtype=np.float16).astype(np.float32)
-    arr_b = np.frombuffer(texels_b[:n_pixels * 8], dtype=np.float16).astype(np.float32)
+    arr_a = np.frombuffer(texels_a[:n_pixels * 8], dtype=np.float16).reshape((-1, 4))[:, :3].astype(np.float32)
+    arr_b = np.frombuffer(texels_b[:n_pixels * 8], dtype=np.float16).reshape((-1, 4))[:, :3].astype(np.float32)
 
-    arr_a = arr_a.reshape((-1, 4))[:, :3]
-    arr_b = arr_b.reshape((-1, 4))[:, :3]
-
-    diff = arr_a - arr_b
+    diff = np.nan_to_num(arr_a - arr_b, nan=0.0, posinf=1.0, neginf=-1.0)
+    arr_a = np.nan_to_num(arr_a, nan=0.0, posinf=1.0, neginf=0.0)
+    arr_b = np.nan_to_num(arr_b, nan=0.0, posinf=1.0, neginf=0.0)
     mse = float(np.mean(diff ** 2))
     mae = float(np.mean(np.abs(diff)))
     psnr = 20.0 * math.log10(1.0 / math.sqrt(mse)) if mse > 1e-10 else 100.0

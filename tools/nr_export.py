@@ -60,6 +60,9 @@ def detect_gpu_vendor() -> Tuple[str, str]:
                     if "intel" in gpu_name.lower(): vendor = "intel"
                     elif "nvidia" in gpu_name.lower(): vendor = "nvidia"
                     elif "amd" in gpu_name.lower(): vendor = "amd"
+        elif sys.platform == "darwin":
+            vendor = "apple"
+            gpu_name = "Apple Silicon GPU (Metal)"
         else:
             res = subprocess.run(["lspci"], capture_output=True, text=True, timeout=5)
             low = res.stdout.lower()
@@ -81,6 +84,7 @@ def get_available_encoders(ffmpeg_bin: str) -> Dict[str, bool]:
         for enc in ["av1_qsv", "hevc_qsv", "h264_qsv",
                     "av1_nvenc", "hevc_nvenc", "h264_nvenc",
                     "av1_amf", "hevc_amf", "h264_amf",
+                    "hevc_videotoolbox", "h264_videotoolbox",
                     "libsvtav1", "libx265", "libx264"]:
             encoders[enc] = f" {enc} " in text or f" {enc}\n" in text
     except Exception:
@@ -106,6 +110,10 @@ def select_best_encoder(vendor: str, codec: str, available: Dict[str, bool]) -> 
         if codec == "av1": candidates = ["av1_amf", "libsvtav1"]
         elif codec == "hevc": candidates = ["hevc_amf", "libx265"]
         else: candidates = ["h264_amf", "libx264"]
+    elif vendor == "apple":
+        if codec == "hevc": candidates = ["hevc_videotoolbox", "libx265"]
+        elif codec == "h264": candidates = ["h264_videotoolbox", "libx264"]
+        else: candidates = ["libsvtav1"]
     else:
         # Generic order: hardware first, then software
         if codec == "av1": candidates = ["av1_qsv", "av1_nvenc", "av1_amf", "libsvtav1"]
@@ -138,6 +146,9 @@ def get_encoder_params(encoder: str, quality: str) -> List[str]:
     elif "amf" in encoder:
         # AMD AMF params
         params.extend(["-qp_i", str(qp), "-qp_p", str(qp), "-quality", "speed" if quality == "medium" else "quality"])
+    elif "videotoolbox" in encoder:
+        # Apple VideoToolbox params
+        params.extend(["-q:v", str(min(100, max(1, 100 - crf * 3)))])
     elif encoder == "libsvtav1":
         params.extend(["-crf", str(crf), "-preset", "8"])
     elif encoder == "libx265":

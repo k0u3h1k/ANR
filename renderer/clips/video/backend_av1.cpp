@@ -48,7 +48,7 @@ public:
         for (uint32_t i = 0; i < t.samples.size(); i++) {
             if (!t.samples[i].sync)
                 continue;
-            uint8_t head[160];
+            uint8_t head[1024];
             const size_t n = std::min<size_t>(sizeof(head), t.samples[i].size);
             if (mp4.ReadRange(t.samples[i].offset, head, n) && av1::StartsWithKeyFrame(head, n))
                 start_samples_.push_back(i);

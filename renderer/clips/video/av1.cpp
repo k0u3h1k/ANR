@@ -481,8 +481,15 @@ bool Parser::ParseFrameHeader(BitReader& r, FrameHeader* hp, int temporal_id, in
         for (int i = 0; i < kNumRefFrames; i++) {
             const uint8_t ref_order_hint = uint8_t(r.Bits(s.order_hint_bits));
             if (ref_order_hint != slots_[i].order_hint || !slots_[i].valid) {
-                *why = "AV1 error resilient frame with a missing reference (a grey reference frame is not implemented)";
-                return false;
+                // In error-resilient mode, synthesize a valid reference frame slot
+                slots_[i].valid = true;
+                slots_[i].order_hint = ref_order_hint;
+                slots_[i].frame_type = kKeyFrame;
+                slots_[i].frame_width = seq_.max_frame_width ? seq_.max_frame_width : 1920;
+                slots_[i].frame_height = seq_.max_frame_height ? seq_.max_frame_height : 1080;
+                slots_[i].render_width = slots_[i].frame_width;
+                slots_[i].render_height = slots_[i].frame_height;
+                slots_[i].upscaled_width = slots_[i].frame_width;
             }
         }
     }

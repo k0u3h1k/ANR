@@ -35,6 +35,8 @@ cc_binary(
     linkshared = True,
     target_compatible_with = ["@platforms//os:windows"],
     deps = [
+        "//record:anr_sr_upscaler",
+        "//record:anr_rr_denoiser",
         "//record:d3d12_packer",
         "//record:ffx_upscaler",
         "//record:format",

@@ -522,7 +522,8 @@ std::unique_ptr<Mp4> Mp4::Open(const std::string& path, std::string* why) {
         const double mean = double(t.samples[order.back()].pts - t.first_pts) / double(order.size() - 1);
         for (size_t i = 1; i < order.size(); i++) {
             const double step = double(t.samples[order[i]].pts - t.samples[order[i - 1]].pts);
-            if (std::fabs(step - mean) > 1.0 + 1e-9) {
+            // Allow small jitter (up to 2 ticks or 5%) for NTSC fractional rates (e.g. 23.976 / 59.94 fps alternating 1000/1001 tick cadences)
+            if (std::fabs(step - mean) > std::max(2.0, mean * 0.05) + 1e-9) {
                 char text[160];
                 std::snprintf(text, sizeof(text),
                               "variable frame rate (frame %zu is %.0f ticks after frame %zu, the mean is %.2f)", i,

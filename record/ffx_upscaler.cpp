@@ -54,6 +54,10 @@ bool FfxUpscaler::Create(ID3D12Device* device, uint32_t render_width, uint32_t r
                  (call.motion_jittered ? FFX_UPSCALE_ENABLE_MOTION_VECTORS_JITTER_CANCELLATION : 0u) |
                  (call.depth_inverted ? FFX_UPSCALE_ENABLE_DEPTH_INVERTED : 0u) |
                  (call.auto_exposure ? FFX_UPSCALE_ENABLE_AUTO_EXPOSURE : 0u);
+    render_width_ = render_width;
+    render_height_ = render_height;
+    output_width_ = output_width;
+    output_height_ = output_height;
     ffxContext context = nullptr;
     const ffxReturnCode_t r = ((PfnFfxCreateContext)create_)(&context, &desc.header, nullptr);
     if (r != FFX_API_RETURN_OK) {
@@ -88,8 +92,10 @@ bool FfxUpscaler::Dispatch(ID3D12GraphicsCommandList* list, const UpscaleTexture
     // times the scale is in pixels).
     d.jitterOffset = {call.jitter[0], call.jitter[1]};
     d.motionVectorScale = {call.motion_scale[0], call.motion_scale[1]};
-    d.renderSize = {call.render_size[0], call.render_size[1]};
-    d.upscaleSize = {call.output_size[0], call.output_size[1]};
+    d.renderSize = {call.render_size[0] > 0 ? call.render_size[0] : render_width_,
+                    call.render_size[1] > 0 ? call.render_size[1] : render_height_};
+    d.upscaleSize = {call.output_size[0] > 0 ? call.output_size[0] : output_width_,
+                     call.output_size[1] > 0 ? call.output_size[1] : output_height_};
     d.enableSharpening = call.sharpness > 0;
     d.sharpness = call.sharpness;
     d.frameTimeDelta = call.frame_time_ms > 0 ? call.frame_time_ms : 1000.0f / 60;

@@ -109,13 +109,13 @@ def main():
     parser.add_argument("--out", "-o", type=Path, default=Path("out/cmp"), help="Output directory")
 
     parser.add_argument("--generator", "-g", required=True,
-                        choices=("provider", "nvidia", "dlss", "dlssd", "ngx", "fsr", "ffx", "xess", "recorded"),
+                        choices=("provider", "nvidia", "dlss", "dlssd", "ngx", "fsr", "ffx", "xess", "anr", "anr-sr", "anr-rr", "recorded"),
                         help="First generator")
     parser.add_argument("--dll", type=Path, help="DLL path for first generator")
     parser.add_argument("--label", "-l", default="A", help="Label for first generator (e.g. 'ANR FG')")
 
     parser.add_argument("--b-generator", "-bg",
-                        choices=("provider", "nvidia", "dlss", "dlssd", "ngx", "fsr", "ffx", "xess", "recorded"),
+                        choices=("provider", "nvidia", "dlss", "dlssd", "ngx", "fsr", "ffx", "xess", "anr", "anr-sr", "anr-rr", "recorded"),
                         help="Second generator for comparison")
     parser.add_argument("--b-dll", type=Path, help="DLL path for second generator")
     parser.add_argument("--b-label", "-bl", default="B", help="Label for second generator (e.g. 'DLSS-G')")

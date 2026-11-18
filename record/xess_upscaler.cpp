@@ -56,6 +56,8 @@ bool XessUpscaler::Create(ID3D12Device* device, uint32_t render_width, uint32_t 
         return false;
     }
     context_ = context;
+    render_width_ = render_width;
+    render_height_ = render_height;
     // The quality setting whose input range holds the render size, the closest optimum first.
     const xess_2d_t out = {output_width, output_height};
     xess_quality_settings_t best = XESS_QUALITY_SETTING_BALANCED;
@@ -111,8 +113,8 @@ bool XessUpscaler::Dispatch(ID3D12GraphicsCommandList* list, const UpscaleTextur
     e.jitterOffsetY = c.jitter[1];
     e.exposureScale = c.exposure_scale > 0 ? c.exposure_scale : 1.0f;
     e.resetHistory = c.reset;
-    e.inputWidth = c.render_size[0];
-    e.inputHeight = c.render_size[1];
+    e.inputWidth = c.render_size[0] > 0 ? c.render_size[0] : render_width_;
+    e.inputHeight = c.render_size[1] > 0 ? c.render_size[1] : render_height_;
     e.inputColorBase = {c.color_base[0], c.color_base[1]};
     e.inputMotionVectorBase = {c.motion_base[0], c.motion_base[1]};
     e.inputDepthBase = {c.depth_base[0], c.depth_base[1]};

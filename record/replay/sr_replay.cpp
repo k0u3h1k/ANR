@@ -34,7 +34,7 @@ namespace replay {
 namespace {
 
 constexpr const char* USAGE =
-    "usage: nr-replay --record DIR --out DIR --generator dlss|dlssd|ngx|fsr|xess|recorded [--dll PATH]\n"
+    "usage: nr-replay --record DIR --out DIR --generator dlss|dlssd|ngx|fsr|xess|anr|anr-rr|recorded [--dll PATH]\n"
     "                 [--label TEXT] [--frames A:B] [--preset X] [--raw] [--stream PATH|-] [--ngx-log]\n";
 
 struct Options {
@@ -81,8 +81,10 @@ bool Parse(int argc, char** argv, Options& o, std::string& error) {
             return false;
         }
     }
-    if (o.record.empty() || o.out.empty() || o.generator.empty() || (o.dll.empty() && o.generator != "recorded")) {
-        error = "--record, --out, --generator and (but for recorded) --dll are needed";
+    const bool built_in = o.generator == "recorded" || o.generator == "anr" || o.generator == "anr-sr" ||
+                          o.generator == "anr-rr" || o.generator == "anrrr";
+    if (o.record.empty() || o.out.empty() || o.generator.empty() || (o.dll.empty() && !built_in)) {
+        error = "--record, --out, --generator and (except for anr/recorded) --dll are needed";
         return false;
     }
     if (!o.raw && o.stream.empty()) {
